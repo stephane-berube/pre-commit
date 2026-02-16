@@ -18,7 +18,7 @@ classifiers = [
 version = "0.1.2"
 
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["pyyaml"]
 optional-dependencies.dev = ["pre-commit", "pytest"]
 
 scripts.validate-filename = "filename_validation.cli:main"
