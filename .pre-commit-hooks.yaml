@@ -1,0 +1,6 @@
+- id: validate-filename
+  name: validate filename
+  description: This hook ensures that Python filenames follow best practices.
+  entry: validate-filename
+  language: python
+  types: [python]
