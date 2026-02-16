@@ -3,17 +3,16 @@ build-backend = "setuptools.build_meta"
 requires = ["setuptools", "setuptools-scm"]
 
 [project]
-name = "filename-validation"
-description = "Pre-commit hook to validate Python filenames."
+name = "cfn-cli-validation"
+description = "Pre-commit hook to validate cfn-cli files."
 readme = "README.md"
-keywords = ["filename validation", "pre-commit"]
+keywords = ["cfncli", "pre-commit"]
 license = {file = "LICENSE"}
 authors = [
-  {name = "Stefanie Molin", email = "email@example.com"},
+  {name = "Stephane Berube", email = "stephane.berube@ised-isde.gc.ca"},
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Programming Language :: Python"
+    "Development Status :: 3 - Alpha"
 ]
 version = "0.1.2"
 
@@ -21,11 +20,11 @@ requires-python = ">=3.10"
 dependencies = ["pyyaml"]
 optional-dependencies.dev = ["pre-commit", "pytest"]
 
-scripts.validate-filename = "filename_validation.cli:main"
+scripts.cfncli-lint = "cfncli_lint.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/stefmolin/filename-validation"
-Documentation = "https://github.com/stefmolin/filename-validation"
+Homepage = "https://github.com/stephane-berube/pre-commit"
+Documentation = "https://github.com/stephane-berube/pre-commit"
 
 [tool.setuptools.packages.find]
 where = ["src"]

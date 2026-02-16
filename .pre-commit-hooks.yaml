@@ -1,6 +1,6 @@
-- id: validate-filename
-  name: validate filename
-  description: This hook ensures that Python filenames follow best practices.
-  entry: validate-filename
+- id: cfncli-lint
+  name: validate cfn-cli
+  description: Run cfn-lint on cfncli files.
+  entry: cfncli-lint
   language: python
   types: [yaml]
