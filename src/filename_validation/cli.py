@@ -9,6 +9,9 @@ def is_valid_filename(filename: str, min_len: int = 3) -> bool:
     # extract the name so that `/my/repo/x.py` becomes `x`
     name = Path(filename).stem
 
+    print(filename)
+    print(Path(filename).parents[0])
+
     if too_short := len(name) < min_len:
         print(f'Name too short ({min_len=}): {filename}')
 
