@@ -1,9 +1,14 @@
-import subprocess
-import yaml
-from pathlib import Path
 import argparse
+import yaml
+
+from cfnlint.api import lint_file, ManualArgs
+from pathlib import Path
 from typing import Sequence
 
+
+# TODO: handle nested stacks
+#       When a resource type is "AWS::CloudFormation::Stack"
+#       Add the underlying template as a resource and pass params, etc.
 
 def parse_cfn_cli(filename):
     resources = []
@@ -30,16 +35,15 @@ def parse_cfn_cli(filename):
                     packaged = resource.get('Package', False)
 
                 template_path = Path(cfn_cli_dir + '/' + template).resolve()
-                params = []
 
-                for key, value in resource.get('Parameters', {}).items():
-                    params.append(f'{key}={value}')
-                
+                parameters = resource.get('Parameters', {})
+
                 resources.append({
                     'CfnCliPath': filename,
-                    'Template': str(template_path),
-                    'Parameters': params,
-                    'Packaged': packaged
+                    'Packaged': packaged,
+                    'Parameters': [parameters],
+                    'ResourceName': resource_name,
+                    'Template': str(template_path)
                 })
 
     return resources
@@ -72,38 +76,32 @@ def run_cfn_lint(resources: list):
     results = []
 
     for resource in resources:
-        template_path = resource['Template']
-        params = resource['Parameters']
         cfncli_path = resource['CfnCliPath']
+        resource_name = resource['ResourceName']
+        template_path = Path(resource['Template'])
+        params = resource['Parameters']
         packaged = resource['Packaged']
         ignored_rules = []
-        extra_args = []
 
         if packaged:
             ignored_rules.append('W3002')
 
-        if len(ignored_rules) > 0:
-            extra_args = ["-i"] + ignored_rules
+        # TODO: look into the feasibility of using our config file
+        #       and then tweaking it to add rules, params, etc.
+        # config = ConfigFileArgs()
+        config = ManualArgs(
+            ignore_checks=ignored_rules,
+            parameters=params,
+            regions=['ca-central-1']
+        )
 
-        try:
-            result = subprocess.run(
-                ["cfn-lint", '--template', template_path, "--parameters"] + params + extra_args,
-                capture_output=True, # Captures stdout and stderr
-                text=True,           # Decodes output as a string (instead of bytes)
-                check=True           # Raises CalledProcessError if it fails
-            )
-            print(result.stdout)
-            failure = False
-        except subprocess.CalledProcessError as e:
-            print(cfncli_path)
-            lines = e.stdout.splitlines()
+        errors = lint_file(template_path, config)
 
-            for line in lines:
-                if line != "":
-                    print(f'    * {line}')
+        for error in errors:
+            print(f'{cfncli_path}:{resource_name} - [{error.rule.id}] {error.message}')
 
-            print(e.stderr)
-
+        failure = False
+        if len(errors) > 0:
             failure = True
 
         results.append(failure)

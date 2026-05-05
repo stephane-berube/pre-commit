@@ -17,7 +17,7 @@ classifiers = [
 version = "0.1.2"
 
 requires-python = ">=3.10"
-dependencies = ["pyyaml"]
+dependencies = ["pyyaml", "cfn-lint"]
 optional-dependencies.dev = ["pre-commit", "pytest"]
 
 scripts.cfncli-lint = "cfncli_lint.cli:main"
