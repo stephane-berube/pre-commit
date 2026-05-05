@@ -18,7 +18,18 @@ def parse_cfn_cli(filename):
                 if resource_name == 'Config':
                     continue
 
-                template = Path(cfn_cli_dir + '/' + resource['Template']).resolve()
+                packaged = False
+                extends = resource.get('Extends')
+
+                if extends is not None:
+                    blueprint = cfncli['Blueprints'][extends]
+                    template = blueprint['Template']
+                    packaged = blueprint.get('Package', False)
+                else:
+                    template = resource['Template']
+                    packaged = resource.get('Package', False)
+
+                template_path = Path(cfn_cli_dir + '/' + template).resolve()
                 params = []
 
                 for key, value in resource.get('Parameters', {}).items():
@@ -26,8 +37,9 @@ def parse_cfn_cli(filename):
                 
                 resources.append({
                     'CfnCliPath': filename,
-                    'Template': str(template),
-                    'Parameters': params
+                    'Template': str(template_path),
+                    'Parameters': params,
+                    'Packaged': packaged
                 })
 
     return resources
@@ -63,10 +75,19 @@ def run_cfn_lint(resources: list):
         template_path = resource['Template']
         params = resource['Parameters']
         cfncli_path = resource['CfnCliPath']
+        packaged = resource['Packaged']
+        ignored_rules = []
+        extra_args = []
+
+        if packaged:
+            ignored_rules.append('W3002')
+
+        if len(ignored_rules) > 0:
+            extra_args = ["-i"] + ignored_rules
 
         try:
             result = subprocess.run(
-                ["cfn-lint", '--template', template_path, "--parameters"] + params,
+                ["cfn-lint", '--template', template_path, "--parameters"] + params + extra_args,
                 capture_output=True, # Captures stdout and stderr
                 text=True,           # Decodes output as a string (instead of bytes)
                 check=True           # Raises CalledProcessError if it fails
