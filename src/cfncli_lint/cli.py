@@ -52,22 +52,25 @@ def parse_cfn_cli(filename):
 def find_targets(filepaths: list) -> list:
     targets = []
 
-    for filepath in filepaths:
-        pth = Path(filepath)
-        filename = pth.name    # ex: "cfn-cli.yaml"
-        type = pth.parents[-2] # top-folder (ex: "foundational" or "products")
+    try:
+        for filepath in filepaths:
+            pth = Path(filepath)
+            filename = pth.name    # ex: "cfn-cli.yaml"
+            type = pth.parents[-2] # top-folder (ex: "foundational" or "products")
 
-        if str(type) == 'products' and str(filename) == 'cfn-cli.yaml':
-            cfn_cli_info = parse_cfn_cli(filepath)
+            if str(type) == 'products' and str(filename) == 'cfn-cli.yaml':
+                cfn_cli_info = parse_cfn_cli(filepath)
 
-            targets.append(cfn_cli_info)
+                targets.append(cfn_cli_info)
 
-    # TODO: if name is another yaml (presumably an underlying template)
-        # Add to cfn-cli target as long as it wasn't part of a cfn-cli
-        # We'll run cfn-cli without parameters on those ones.
+        # TODO: if name is another yaml (presumably an underlying template)
+            # Add to cfn-cli target as long as it wasn't part of a cfn-cli
+            # We'll run cfn-cli without parameters on those ones.
 
-    # TODO: if the .yaml file is in /foundational
-        # TODO: cfn-lint with its equivalent .json
+        # TODO: if the .yaml file is in /foundational
+            # TODO: cfn-lint with its equivalent .json
+    except Exception as e:
+        print(e)
 
     return targets
 
@@ -128,3 +131,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         results.extend(run_cfn_lint(target))
 
     return int(any(results))
+
+main()
