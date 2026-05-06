@@ -1,19 +1,27 @@
+"""Validate cfn-cli.yaml templates before pushing to CodeCommit."""
+
 import argparse
 import collections
 import logging
-import yaml
-
-from cfnlint.api import lint_file, ManualArgs
-from .cfn_tools import load_yaml
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
+import yaml
+from cfnlint.api import ManualArgs, lint_file
 
-# TODO: handle nested stacks
-#       When a resource type is "AWS::CloudFormation::Stack"
-#       Add the underlying template as a resource and pass params, etc.
+from .cfn_tools import load_yaml
 
-def parse_cfn_cli(filename):
+logger = logging.getLogger(__name__)
+
+def parse_cfn_cli(filename: str) -> list:
+    """Parse a cfn-cli.yaml file and return common properties.
+
+    Args:
+        filename (str): Path of the CFN template file.
+
+    Returns:
+        dict: Properties of the cfn-cli.yaml file.
+    """
     resources = []
     cfn_cli_pth = Path(filename)
     cfn_cli_dir = str(cfn_cli_pth.parent)
@@ -54,33 +62,43 @@ def parse_cfn_cli(filename):
     return resources
 
 
-def find_targets(filepaths: list) -> list:
+def find_cfn_cli_paths(filepaths: list) -> list:
+    """Find the cfn-cli.yaml files about to be commited.
+
+    Args:
+        filepaths (list): List of file paths about to be commited.
+
+    Returns:
+        list: The paths to cfn-cli.yaml files about to be commited.
+    """
     targets = []
 
     try:
         for filepath in filepaths:
             pth = Path(filepath)
             filename = pth.name    # ex: "cfn-cli.yaml"
-            type = pth.parents[-2] # top-folder (ex: "foundational" or "products")
+            template_type = pth.parents[-2] # top-folder (ex: "foundational" or "products")
 
-            if str(type) == 'products' and str(filename) == 'cfn-cli.yaml':
-                cfn_cli_info = parse_cfn_cli(filepath)
-
-                targets.append(cfn_cli_info)
-
-        # TODO: if name is another yaml (presumably an underlying template)
-            # Add to cfn-cli target as long as it wasn't part of a cfn-cli
-            # We'll run cfn-cli without parameters on those ones.
-
-        # TODO: if the .yaml file is in /foundational
-            # TODO: cfn-lint with its equivalent .json
-    except Exception as e:
-        print(e)
+            if str(template_type) == 'products' and str(filename) == 'cfn-cli.yaml':
+                targets.append(filepath)
+    except Exception:
+        logger.exception('Error while dealing with filepaths')
 
     return targets
 
 
-def run_cfn_lint(resource: dict):
+def run_cfn_lint(resource: dict) -> bool:
+    """Run cfn-lint checks.
+
+    Runs on the underlying template with the parameters of the related
+    resource from the cfn-cli.yaml file.
+
+    Args:
+        resource (list): Properties of the target resource in the cfn-cli.yaml file.
+
+    Returns:
+        bool: True if errors are found, False otherwise.
+    """
     cfncli_path = resource['CfnCliPath']
     resource_name = resource['ResourceName']
     template_path = Path(resource['Template'])
@@ -91,9 +109,6 @@ def run_cfn_lint(resource: dict):
     if packaged:
         ignored_rules.append('W3002')
 
-    # TODO: look into the feasibility of using our config file
-    #       and then tweaking it to add rules, params, etc.
-    # config = ConfigFileArgs()
     config = ManualArgs(
         ignore_checks=ignored_rules,
         parameters=[params],
@@ -103,28 +118,44 @@ def run_cfn_lint(resource: dict):
     errors = lint_file(template_path, config)
 
     for error in errors:
-        logging.error(f'{cfncli_path}:{resource_name} - [{error.rule.id}] {error.message}')
+        logger.error(f'{cfncli_path}:{resource_name} - [{error.rule.id}] {error.message}')
 
     return len(errors) > 0
 
 
-# FIXME: Different regions are allowed to use the same stackname
-def has_duplicate_stack_names(stack_names: list):
+def has_duplicate_stack_names(stack_names: list) -> bool:
+    """Checks if a cfn-cli.yaml file contains duplicate stack names.
+
+    The last resource would overwrite previous ones. So we want to flag this.
+
+    Args:
+        stack_names (list): List of stack names used in the cfn-cli file.
+
+    Returns:
+        bool: True if duplicates are found, False otherwise.
+    """
     duplicate_stack_names = [item for item, count in collections.Counter(stack_names).items() if count > 1]
 
     has_dupes = len(duplicate_stack_names) > 0
 
-    # TODO: stderr / logger
     if has_dupes:
-        logging.error('Duplicate stack names:')
+        logger.error('Duplicate stack names:')
 
         for dupe in duplicate_stack_names:
-            logging.error('* ' + dupe)
+            logger.error('* ' + dupe)
 
     return has_dupes
 
 
-def check_file(resources: list):
+def check_file(resources: list) -> list:
+    """Perform a series of check on the given resources.
+
+    Args:
+        resources (list): Resource to perform checks on.
+
+    Returns:
+        list: Results of the various checks.
+    """
     results = []
     stack_names = []
 
@@ -143,7 +174,15 @@ def check_file(resources: list):
     return results
 
 
-def has_missing_params(resource: dict):
+def has_missing_params(resource: dict) -> bool:
+    """Checks if a cfn-cli resource has missing mandatory parameters.
+
+    Args:
+        resource (dict): Resource to perform checks on.
+
+    Returns:
+        bool: True if mandatory parameters are missing, False otherwise.
+    """
     template_parameters = get_template_parameters(resource['Template'])
     resource_parameter_names = resource['Parameters'].keys()
     resource_name = resource['ResourceName']
@@ -157,10 +196,10 @@ def has_missing_params(resource: dict):
     has_missing_params = len(missing_cfncli_parameters) > 0
 
     if has_missing_params:
-        logging.error(f'Missing parameters for {resource_name}:')
+        logger.error(f'Missing parameters for {resource_name}:')
 
         for missing_param in missing_cfncli_parameters:
-            logging.error(f'* {missing_param}')
+            logger.error(f'* {missing_param}')
 
     return has_missing_params
 
@@ -182,6 +221,14 @@ def get_template_parameters(template_path: str) -> dict:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """The prek entrypoint.
+
+    Args:
+        argv (Sequence[str]): Files about to be commited, or None.
+
+    Returns:
+        int: 0 on success, any other number for failure.
+    """
     parser = argparse.ArgumentParser(
         prog='cfncli-lint',
     )
@@ -192,11 +239,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     args = parser.parse_args(argv)
-    targets = find_targets(args.filenames)
+    cfn_cli_paths = find_cfn_cli_paths(args.filenames)
 
     results = []
 
-    for target in targets:
-        results = check_file(target)
+    for cfn_cli_path in cfn_cli_paths:
+        cfn_cli_info = parse_cfn_cli(cfn_cli_path)
+        results = check_file(cfn_cli_info)
 
     return int(any(results))
