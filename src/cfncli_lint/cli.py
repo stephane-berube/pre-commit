@@ -50,6 +50,7 @@ def parse_cfn_cli(filename: str) -> list:
                 parameters = resource.get('Parameters', {})
 
                 resources.append({
+                    'Capabilities': resource.get('Capabilities', []),
                     'CfnCliPath': filename,
                     'Packaged': packaged,
                     'Parameters': parameters,
@@ -147,6 +148,28 @@ def has_duplicate_stack_names(stack_names: list) -> bool:
     return has_dupes
 
 
+def check_capabilities(cfn_cli_resource_name, capabilities, cfn_resources):
+    error = False
+
+    require_capabilities = [
+        'AWS::IAM::Group',
+        'AWS::IAM::AccessKey',
+        'AWS::IAM::InstanceProfile',
+        'AWS::IAM::ManagedPolicy',
+        'AWS::IAM::Policy',
+        'AWS::IAM::Role',
+        'AWS::IAM::User',
+        'AWS::IAM::UserToGroupAddition'
+    ]
+
+    for cfn_resource in cfn_resources.values():
+        if cfn_resource['Type'] in require_capabilities and 'CAPABILITY_NAMED_IAM' not in capabilities:
+            error = True
+            logger.error(f'{cfn_cli_resource_name} is missing "CAPABILITY_NAMED_IAM" Capabilities')
+
+    return error
+
+
 def check_file(resources: list) -> list:
     """Perform a series of check on the given resources.
 
@@ -162,11 +185,17 @@ def check_file(resources: list) -> list:
     for resource in resources:
         stack_names.append(resource['StackName'])
 
+        # Parse underlying template
+        underlying_template = parse_underlying_template(resource['Template'])
+
         # cfn-lint checks
         results.append(run_cfn_lint(resource))
 
         # Check for missing params
-        results.append(has_missing_params(resource))
+        results.append(has_missing_params(resource, underlying_template['Parameters']))
+
+        # Check for capabilities
+        results.append(check_capabilities(resource['ResourceName'], resource['Capabilities'], underlying_template['Resources']))
 
     # Check for duplicate stack names
     results.append(has_duplicate_stack_names(stack_names))
@@ -174,16 +203,16 @@ def check_file(resources: list) -> list:
     return results
 
 
-def has_missing_params(resource: dict) -> bool:
+def has_missing_params(resource: dict, template_parameters: dict) -> bool:
     """Checks if a cfn-cli resource has missing mandatory parameters.
 
     Args:
         resource (dict): Resource to perform checks on.
+        template_parameters (dict): Parameters of the underlying template.
 
     Returns:
         bool: True if mandatory parameters are missing, False otherwise.
     """
-    template_parameters = get_template_parameters(resource['Template'])
     resource_parameter_names = resource['Parameters'].keys()
     resource_name = resource['ResourceName']
 
@@ -204,8 +233,8 @@ def has_missing_params(resource: dict) -> bool:
     return has_missing_params
 
 
-def get_template_parameters(template_path: str) -> dict:
-    """Get parameters of the CFN template.
+def parse_underlying_template(template_path: str) -> dict:
+    """Parse the underlying tempalte the cfn-cli resource points to.
 
     Args:
         template_path (str): Path of the CFN template file.
@@ -215,9 +244,8 @@ def get_template_parameters(template_path: str) -> dict:
     """
     with Path(template_path).open('r') as file:
         file_contents = file.read()
-        template = load_yaml(file_contents)
 
-        return template.get('Parameters', {})
+        return load_yaml(file_contents)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
