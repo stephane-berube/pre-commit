@@ -1,5 +1,6 @@
 import argparse
 import collections
+import logging
 import yaml
 
 from cfnlint.api import lint_file, ManualArgs
@@ -101,9 +102,8 @@ def run_cfn_lint(resource: dict):
 
     errors = lint_file(template_path, config)
 
-    # TODO: stderr / logger
     for error in errors:
-        print(f'{cfncli_path}:{resource_name} - [{error.rule.id}] {error.message}')
+        logging.error(f'{cfncli_path}:{resource_name} - [{error.rule.id}] {error.message}')
 
     return len(errors) > 0
 
@@ -116,10 +116,10 @@ def has_duplicate_stack_names(stack_names: list):
 
     # TODO: stderr / logger
     if has_dupes:
-        print('Duplicate stack names:')
+        logging.error('Duplicate stack names:')
 
         for dupe in duplicate_stack_names:
-            print('* ' + dupe)
+            logging.error('* ' + dupe)
 
     return has_dupes
 
@@ -157,10 +157,10 @@ def has_missing_params(resource: dict):
     has_missing_params = len(missing_cfncli_parameters) > 0
 
     if has_missing_params:
-        print(f'Missing parameters for {resource_name}:')
+        logging.error(f'Missing parameters for {resource_name}:')
 
         for missing_param in missing_cfncli_parameters:
-            print(f'* {missing_param}')
+            logging.error(f'* {missing_param}')
 
     return has_missing_params
 
