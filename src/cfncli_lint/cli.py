@@ -83,8 +83,10 @@ def find_cfn_cli_paths(filepaths: list) -> list:
     try:
         for filepath in filepaths:
             pth = Path(filepath)
-            filename = pth.name    # ex: "cfn-cli.yaml"
-            template_type = pth.parents[-2] # top-folder (ex: "foundational" or "products")
+            filename = pth.name
+
+            # top-folder (ex: "foundational" or "products")
+            template_type = pth.parents[-2]
 
             if str(template_type) == 'products' and str(filename) == 'cfn-cli.yaml':
                 targets.append(filepath)
@@ -125,7 +127,8 @@ def run_cfn_lint(resource: dict) -> bool:
     errors = lint_file(template_path, config)
 
     for error in errors:
-        logger.error(f'{cfncli_path}:{resource_name} - [{error.rule.id}] {error.message}')
+        logger.error('%s:%s - [%s] %s', cfncli_path, resource_name, error.rule.id,
+                     error.message)
 
     return len(errors) > 0
 
@@ -141,7 +144,9 @@ def has_duplicate_stack_names(stack_names: list) -> bool:
     Returns:
         bool: True if duplicates are found, False otherwise.
     """
-    duplicate_stack_names = [item for item, count in collections.Counter(stack_names).items() if count > 1]
+    duplicate_stack_names = [
+        item for item, count in collections.Counter(stack_names).items() if count > 1
+    ]
 
     has_dupes = len(duplicate_stack_names) > 0
 
@@ -149,12 +154,30 @@ def has_duplicate_stack_names(stack_names: list) -> bool:
         logger.error('Duplicate stack names:')
 
         for dupe in duplicate_stack_names:
-            logger.error('* ' + dupe)
+            logger.error('* %s', dupe)
 
     return has_dupes
 
 
-def check_capabilities(cfn_cli_resource_name, capabilities, cfn_resources):
+def check_capabilities(
+        cfn_cli_resource_name: str,
+        capabilities: list,
+        cfn_resources: dict
+    ) -> bool:
+    """Checks if a cfn-cli.yaml has required capabilities.
+
+    Deploying IAM resources require the "CAPABILITY_IAM" or "CAPABILITY_NAMED_IAM"
+    capability. Since "CAPABILITY_NAMED_IAM" is a superset of "CAPABILITY_IAM", just
+    expect "CAPABILITY_NAMED_IAM" for IAM resources and be done with it.
+
+    Args:
+        cfn_cli_resource_name (str): Name of the cfncli resource.
+        capabilities (list): The capabilities of the cfncli resource.
+        cfn_resources (dict): The resources in the underlying template.
+
+    Returns:
+        bool: True if missing capabilities are found, False otherwise.
+    """
     error = False
 
     require_capabilities = [
@@ -169,9 +192,13 @@ def check_capabilities(cfn_cli_resource_name, capabilities, cfn_resources):
     ]
 
     for cfn_resource in cfn_resources.values():
-        if cfn_resource['Type'] in require_capabilities and 'CAPABILITY_NAMED_IAM' not in capabilities:
+        if (
+            cfn_resource['Type'] in require_capabilities
+            and 'CAPABILITY_NAMED_IAM' not in capabilities
+        ):
             error = True
-            logger.error(f'{cfn_cli_resource_name} is missing "CAPABILITY_NAMED_IAM" Capabilities')
+            logger.error('%s is missing "CAPABILITY_NAMED_IAM" Capabilities',
+                         cfn_cli_resource_name)
 
     return error
 
@@ -201,7 +228,9 @@ def check_file(resources: list) -> list:
         results.append(has_missing_params(resource, underlying_template['Parameters']))
 
         # Check for capabilities
-        results.append(check_capabilities(resource['ResourceName'], resource['Capabilities'], underlying_template['Resources']))
+        results.append(check_capabilities(resource['ResourceName'],
+                                          resource['Capabilities'],
+                                          underlying_template['Resources']))
 
     # Check for duplicate stack names
     results.append(has_duplicate_stack_names(stack_names))
@@ -231,10 +260,10 @@ def has_missing_params(resource: dict, template_parameters: dict) -> bool:
     has_missing_params = len(missing_cfncli_parameters) > 0
 
     if has_missing_params:
-        logger.error(f'Missing parameters for {resource_name}:')
+        logger.error('Missing parameters for %s:', resource_name)
 
         for missing_param in missing_cfncli_parameters:
-            logger.error(f'* {missing_param}')
+            logger.error('* %s', missing_param)
 
     return has_missing_params
 
