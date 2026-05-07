@@ -41,9 +41,11 @@ def parse_cfn_cli(filename: str) -> list:
                     blueprint = cfncli['Blueprints'][extends]
                     template = blueprint['Template']
                     packaged = blueprint.get('Package', False)
+                    region = blueprint.get('Region', 'ca-central-1')
                 else:
                     template = resource['Template']
                     packaged = resource.get('Package', False)
+                    region = resource.get('Region', 'ca-central-1')
 
                 template_path = Path(cfn_cli_dir + '/' + template).resolve()
 
@@ -54,7 +56,7 @@ def parse_cfn_cli(filename: str) -> list:
                     'CfnCliPath': filename,
                     'Packaged': packaged,
                     'Parameters': parameters,
-                    'Region': resource['Region'],
+                    'Region': region,
                     'ResourceName': resource_name,
                     'StackName': resource['StackName'],
                     'Template': str(template_path)
