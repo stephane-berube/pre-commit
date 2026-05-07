@@ -30,22 +30,26 @@ def parse_cfn_cli(filename: str) -> list:
         cfncli = yaml.load(file, Loader=yaml.Loader)
 
         for stage in cfncli['Stages'].values():
-            for resource_name, resource in stage.items():
-                if resource_name == 'Config':
+            for cfncli_resource_name, cfncli_resource in stage.items():
+                if cfncli_resource_name == 'Config':
                     continue
 
                 packaged = False
-                extends = resource.get('Extends')
+                extends = cfncli_resource.get('Extends')
 
                 if extends is not None:
                     blueprint = cfncli['Blueprints'][extends]
-                    template = blueprint['Template']
-                    packaged = blueprint.get('Package', False)
-                    region = blueprint.get('Region', 'ca-central-1')
+
+                    # Merge blueprint with cfncli_resource's properties
+                    # blueprint properties also present in cfncli_resource will get
+                    # overwritten by the cfncli_resource.
+                    resource = blueprint | cfncli_resource
                 else:
-                    template = resource['Template']
-                    packaged = resource.get('Package', False)
-                    region = resource.get('Region', 'ca-central-1')
+                    resource = cfncli_resource
+
+                template = resource['Template']
+                packaged = resource.get('Package', False)
+                region = resource.get('Region', 'ca-central-1')
 
                 template_path = Path(cfn_cli_dir + '/' + template).resolve()
 
@@ -57,7 +61,7 @@ def parse_cfn_cli(filename: str) -> list:
                     'Packaged': packaged,
                     'Parameters': parameters,
                     'Region': region,
-                    'ResourceName': resource_name,
+                    'ResourceName': cfncli_resource_name,
                     'StackName': resource['StackName'],
                     'Template': str(template_path)
                 })
