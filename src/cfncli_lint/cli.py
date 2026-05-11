@@ -225,7 +225,7 @@ def check_file(resources: list) -> list:
         results.append(run_cfn_lint(resource))
 
         # Check for missing params
-        results.append(has_missing_params(resource, underlying_template['Parameters']))
+        results.append(has_missing_params(resource, underlying_template.get('Parameters', {})))
 
         # Check for capabilities
         results.append(check_capabilities(resource['ResourceName'],
