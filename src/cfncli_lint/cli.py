@@ -3,6 +3,8 @@
 import argparse
 import collections
 import logging
+import re
+
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -115,6 +117,8 @@ def run_cfn_lint(resource: dict) -> bool:
     packaged = resource['Packaged']
     ignored_rules = []
 
+    pattern = re.compile(" resolved to '\${[a-z0-9\.]+}'$", re.IGNORECASE)
+
     if packaged:
         ignored_rules.append('W3002')
 
@@ -125,12 +129,22 @@ def run_cfn_lint(resource: dict) -> bool:
     )
 
     errors = lint_file(template_path, config)
+    nb_ignored_errors = 0
 
     for error in errors:
-        logger.error('%s:%s - [%s] %s', cfncli_path, resource_name, error.rule.id,
-                     error.message)
+        error_id = error.rule.id
+        error_message = error.message
 
-    return len(errors) > 0
+        # Ignore errors related to references to other cfn-cli.yaml resources
+        # ex: [W1030] {'Ref': 'Role'} does not match '^arn:(aws[a-zA-Z-]*)?:iam::\\d{12}:role/?[a-zA-Z_0-9+=,.@\\-_/]+$' when 'Ref' is resolved to '${Base.EC2InventoryPolicies.Role}'
+        if error_id == 'W1030' and pattern.search(error_message):
+            nb_ignored_errors += 1
+            continue
+
+        logger.error('%s:%s - [%s] %s', cfncli_path, resource_name, error_id,
+                     error_message)
+
+    return len(errors) - nb_ignored_errors > 0
 
 
 def has_duplicate_stack_names(stack_names: list) -> bool:
