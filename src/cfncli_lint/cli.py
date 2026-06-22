@@ -141,6 +141,10 @@ def run_cfn_lint(resource: dict) -> bool:
             nb_ignored_errors += 1
             continue
 
+        if error_id == 'E2900' and error_message.endswith('is not of type \'array\''):
+            nb_ignored_errors += 1
+            continue
+
         logger.error('%s:%s - [%s] %s', cfncli_path, resource_name, error_id,
                      error_message)
 
