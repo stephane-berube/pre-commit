@@ -125,7 +125,8 @@ def run_cfn_lint(resource: dict) -> bool:
     config = ManualArgs(
         ignore_checks=ignored_rules,
         parameters=[params],
-        regions=['ca-central-1']
+        regions=[resource.get('Region', 'ca-central-1')]
+        # regions=['ca-central-1']
     )
 
     errors = lint_file(template_path, config)
