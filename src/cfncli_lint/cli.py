@@ -236,6 +236,7 @@ def check_file(resources: list) -> list:
 
     for resource in resources:
         stack_names.append(resource['StackName'])
+        template_path = resource['Template']
 
         # Parse underlying template
         underlying_template = parse_underlying_template(resource['Template'])
@@ -246,10 +247,18 @@ def check_file(resources: list) -> list:
         # Check for missing params
         results.append(has_missing_params(resource, underlying_template.get('Parameters', {})))
 
-        # Check for capabilities
-        results.append(check_capabilities(resource['ResourceName'],
-                                          resource['Capabilities'],
-                                          underlying_template['Resources']))
+        # Quickfix for S3
+        if template_path.endswith('s3/s3-bucket.yaml'):
+            if resource['Parameters'].get('CreateAccessKey'):
+                # Only check for capabilities if "CreateAccessKey" is true
+                results.append(check_capabilities(resource['ResourceName'],
+                                                resource['Capabilities'],
+                                                underlying_template['Resources']))
+        else:
+            # Check for capabilities for resources types other than s3-bucket
+            results.append(check_capabilities(resource['ResourceName'],
+                                            resource['Capabilities'],
+                                            underlying_template['Resources']))
 
     # Check for duplicate stack names
     results.append(has_duplicate_stack_names(stack_names))
