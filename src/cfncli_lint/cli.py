@@ -152,28 +152,32 @@ def run_cfn_lint(resource: dict) -> bool:
     return len(errors) - nb_ignored_errors > 0
 
 
-def has_duplicate_stack_names(stack_names: list) -> bool:
+def has_duplicate_stack_names(stacks_regions: dict) -> bool:
     """Checks if a cfn-cli.yaml file contains duplicate stack names.
 
     The last resource would overwrite previous ones. So we want to flag this.
 
     Args:
-        stack_names (list): List of stack names used in the cfn-cli file.
+        stacks_regions (dict): List of stack names, grouped by region.
 
     Returns:
         bool: True if duplicates are found, False otherwise.
     """
-    duplicate_stack_names = [
-        item for item, count in collections.Counter(stack_names).items() if count > 1
-    ]
+    has_dupes = False
 
-    has_dupes = len(duplicate_stack_names) > 0
+    for region, stack_names in stacks_regions.items():
+        duplicate_stack_names = [
+            item for item, count in collections.Counter(stack_names).items() if count > 1
+        ]
 
-    if has_dupes:
-        logger.error('Duplicate stack names:')
+        has_dupes_in_region = len(duplicate_stack_names) > 0
 
-        for dupe in duplicate_stack_names:
-            logger.error('* %s', dupe)
+        if has_dupes_in_region:
+            has_dupes = True
+            logger.error(f'Duplicate stack names in {region}:')
+
+            for dupe in duplicate_stack_names:
+                logger.error('* %s', dupe)
 
     return has_dupes
 
@@ -232,10 +236,15 @@ def check_file(resources: list) -> list:
         list: Results of the various checks.
     """
     results = []
-    stack_names = []
+    stacks_regions = {}
 
     for resource in resources:
-        stack_names.append(resource['StackName'])
+        region = resource['Region']
+
+        if stacks_regions.get(region) is None:
+            stacks_regions[region] = []
+
+        stacks_regions[region].append(resource['StackName'])
         template_path = resource['Template']
 
         # Parse underlying template
@@ -260,8 +269,10 @@ def check_file(resources: list) -> list:
                                             resource['Capabilities'],
                                             underlying_template['Resources']))
 
-    # Check for duplicate stack names
-    results.append(has_duplicate_stack_names(stack_names))
+    # Check for duplicate stack names within the same cfn-cli.yaml
+    results.append(has_duplicate_stack_names(stacks_regions))
+
+    # TODO: Check for stacks with these name in the AWS Account names so we don't accidentally overwrite something that already exists.
 
     return results
 
